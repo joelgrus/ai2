@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>AI2 Word Search</title>
+    <style media="screen">
+      * {
+        font-weight: 100;
+      }
+      h1 {
+        text-align: center;
+        margin: 40px auto;
+      }
+      .instruction, #results {
+        margin: 40px auto;
+        width: 20%;
+        min-width: 480px;
+      }
+      #results {
+        display: none;
+      }
+      .rowhead div {
+        font-weight: bold;
+      }
+      .rowhead div, .row div {
+        width: 32%;
+        display: inline-block;
+        text-align: center;
+        border-bottom: 1px solid grey;
+        padding: 5px 0px;
+      }
+    </style>
+  </head>
+  <body>
+  <h1>AI2 Word Search</h1>
+  <div class="instruction">
+    <span> 1. Enter search words (comma seperated): <span>
+    <input id="words" type="text" name="words" placeholder="Ex: Whale,Sea">
+  </div>
+  <div class="instruction">
+    <span> 2. Upload file(s):</span>
+    <input id="files" type="file" name="file" multiple onchange="analyzeFiles(this.files)">
+  </div>
+  <div id="results">
+    <div class="rowhead">
+      <div> Word </div><div> Top Document </div><div> Score </div>
+    </div>
+    <div id="rowbody"></div>
+  </div>
+
+  <script type="text/javascript">
+
+    // get search words from input
+    function getSearchWords (){
+      let searchWords = document.getElementById('words').value.toLowerCase()
+      return searchWords.split(',').map(w => w.replace(/\W/g, ''))
+    }
+
+    // reset file submit
+    function clearInput (){
+      let searchWords = document.getElementById('files').value = ''
+    }
+
+    // display results
+    function showResults (counts){
+      results = document.getElementById('rowbody')
+      results.innerHTML = ''
+      for (let i in counts){
+          results.innerHTML += '<div class="row">'
+            + '<div>' + counts[i][0] + '</div>'
+            + '<div>' + counts[i][2].name + '</div>'
+            + '<div>' + (counts[i][2].counts ? counts[i][2].counts[counts[i][0]] : 0)
+              + '/' + counts[i][2].count
+              + ' (' + (counts[i][1] * 100).toPrecision(5) + '%)</div>'
+            + '</div>'
+      }
+      results.parentElement.style.display = "inherit"
+    }
+
+    // get and iterate through files (async)
+    function analyzeFiles(files){
+      searchWords = getSearchWords()
+      let filePromises = [...files].map(file => {
+        return new Promise((resolve, reject) => {
+
+          // get file using html5 FileReader
+          let reader = new FileReader()
+          reader.readAsText(file);
+          reader.onloadend = () => {
+            let fileStats = {
+              name: file.name,
+              count: 0,
+              counts: {}
+            }
+            let fileStr = reader.result.toLowerCase()
+
+            // iterate through string, count words and if the word is in the
+            // search words, add to or increment hash table
+            let newWord = ''
+            for (let char = 0; char < fileStr.length; char++){
+              if (/[a-z]/.test(fileStr[char])){
+                newWord += fileStr[char].toLowerCase()
+              } else if (fileStr[char] === ' ' || fileStr[char] === '\n'
+                                               || char == fileStr.length -1){
+                if (~searchWords.indexOf(newWord)){
+                  fileStats.counts[newWord] = fileStats.counts[newWord] || 0
+                  fileStats.counts[newWord]++
+                }
+                fileStats.count++
+                newWord = ''
+                if (fileStr[char] === '\n') char++
+              }
+            }
+            resolve(fileStats)
+          }
+        })
+      })
+
+      // wait for all files to be processed
+      Promise.all(filePromises).then(stats => {
+
+        // find document with largest TF score per word
+        var counts = searchWords.map(word => {
+          words = [word, 0]
+          for (let f in stats){
+            let tf_score = stats[f].counts[word] / stats[f].count
+            if (tf_score > words[1]){
+              words = [word, tf_score, stats[f]]
+            }
+          }
+          if (!words[2]) { words.push({name:'None',count:0}) }
+          return words
+        })
+
+        // clean up and show
+        clearInput()
+        showResults(counts)
+      })
+    }
+  </script>
+  </body>
+</html>
